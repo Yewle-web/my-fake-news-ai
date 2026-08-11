@@ -9,11 +9,21 @@ st.set_page_config(page_title="AI 가짜뉴스 판별 시스템", page_icon="�
 st.title("🤖 AI 가짜뉴스 판별 시스템")
 st.write("영어 뉴스 기사 본문을 입력하시면 AI가 **진짜 뉴스(TRUE)**인지 **가짜 뉴스(FAKE)**인지 판별해 드립니다.")
 
+# 파일 읽기 함수 (여러 인코딩 시도)
+def read_csv_safe(file_path):
+    encodings = ['utf-8', 'utf-8-sig', 'cp949', 'euc-kr', 'latin1']
+    for enc in encodings:
+        try:
+            return pd.read_csv(file_path, encoding=enc)
+        except Exception:
+            continue
+    # 그래도 실패하면 깨진 문자 무시하고 읽기
+    return pd.read_csv(file_path, encoding='utf-8', encoding_errors='ignore')
+
 @st.cache_resource
 def train_model():
-    # 저장소 안의 CSV 파일 직접 로드
-    fake_df = pd.read_csv("Fake.csv")
-    true_df = pd.read_csv("True.csv")
+    fake_df = read_csv_safe("Fake.csv")
+    true_df = read_csv_safe("True.csv")
     
     fake_df['label'] = 1
     true_df['label'] = 0
@@ -26,7 +36,7 @@ def train_model():
         ('clf', LogisticRegression())
     ])
     
-    model.fit(df['text'], df['label'])
+    model.fit(df['text'].astype(str), df['label'])
     return model
 
 try:
