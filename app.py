@@ -11,16 +11,18 @@ st.set_page_config(page_title="AI 가짜뉴스 판별 시스템", page_icon="�
 st.title("🤖 AI 가짜뉴스 판별 시스템")
 st.write("영어 뉴스 기사 본문을 입력하시면 AI가 **진짜 뉴스(TRUE)**인지 **가짜 뉴스(FAKE)**인지 판별해 드립니다.")
 
-# 텍스트 노이즈 정제 (특수문자, 특수기호 제거로 정확도 향상)
+# 텍스트 고급 전처리 (출처 및 꼼수 단어 제거)
 def clean_text(text):
     text = str(text).lower()
+    # 로이터 등 특정 언론사 표기 노이즈 제거 (예: washington (reuters) - )
+    text = re.sub(r'^.*?\(reuters\)\s*-\s*', '', text)
     text = re.sub(r'\[.*?\]', '', text)
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     text = re.sub(r'<.*?>+', '', text)
     text = re.sub(r'[%s]' % re.escape(string.punctuation), '', text)
-    text = re.sub(r'\n', '', text)
+    text = re.sub(r'\n', ' ', text)
     text = re.sub(r'\w*\d\w*', '', text)
-    return text
+    return text.strip()
 
 def read_csv_safe(file_path):
     encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp949']
@@ -36,32 +38,31 @@ def train_model():
     fake_df = read_csv_safe("Fake.csv")
     true_df = read_csv_safe("True.csv")
     
-    # text 컬럼 추출
     fake_text = fake_df['text'] if 'text' in fake_df.columns else fake_df.iloc[:, 0]
     true_text = true_df['text'] if 'text' in true_df.columns else true_df.iloc[:, 0]
         
     df_fake = pd.DataFrame({'text': fake_text, 'label': 1})
     df_true = pd.DataFrame({'text': true_text, 'label': 0})
     
-    # 💡 데이터 학습량 1,000개 ➡️ 10,000개로 대폭 확대 (정확도 대폭 상승)
-    df = pd.concat([df_fake.head(10000), df_true.head(10000)], axis=0).reset_index(drop=True)
+    # 5,000개 데이터셋 활용
+    df = pd.concat([df_fake.head(5000), df_true.head(5000)], axis=0).reset_index(drop=True)
     
-    # 텍스트 정제
+    # 데이터 정제 진행
     df['clean_text'] = df['text'].apply(clean_text)
     
-    # 💡 n-gram (1단어~2단어 조합 분석) 및 max_features 10,000개로 확대
+    # TF-IDF 및 로지스틱 회귀 모델 구축
     model = Pipeline([
-        ('tfidf', TfidfVectorizer(stop_words='english', max_features=10000, ngram_range=(1, 2))),
-        ('clf', LogisticRegression(max_iter=1000))
+        ('tfidf', TfidfVectorizer(stop_words='english', max_features=8000, ngram_range=(1, 2))),
+        ('clf', LogisticRegression(C=2.0, max_iter=1000))
     ])
     
     model.fit(df['clean_text'], df['label'])
     return model
 
 try:
-    with st.spinner("데이터 20,000건을 고성능 학습 중입니다... (약 10~20초 소요)"):
+    with st.spinner("최적화된 AI 모델을 학습하는 중입니다..."):
         model = train_model()
-    st.success("고성능 AI 모델 준비 완료!")
+    st.success("고성능 AI 준비 완료!")
 except Exception as e:
     st.error(f"모델 학습 중 에러 발생: {e}")
     model = None
